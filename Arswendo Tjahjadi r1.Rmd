@@ -1,0 +1,111 @@
+---
+title: "Machine Learning on Human Exercise Data"
+author: "Arswendo Tjahjadi"
+date: "June 27, 2016"
+output: html_document
+---
+
+###Background
+Using an on-body sensing measurement, six volunteers were asked to do weight lifting exercises; Unilateral Dumbbell Biceps Curl. The weight lifting were done in five different methods; class A is when exactly per the specification, the class B to E are done in different unique ways that do not meet the specification.
+
+The data are imported from  http://groupware.les.inf.puc-rio.br/har#ixzz4DDan2mdK
+
+The goal of this analysis is to be able to predict based on the human activity measurement whether the exercises were done correctly.
+
+### Data Preparation
+The raw data (file name pml-training) and final validation samples (file name pml-testing) were downloaded from the provided website.
+The raw data file has 19622 rows and the validation sample file has 20 rows.
+
+After exploring the raw data, several points were noted then handled.
+For many columns, the majority of the values are NAs; more than 90% of the content. We handled these columns by excluding them from the analysis.
+There are also a few columns that contain the sample IDs. These columns were not used in the analysis.
+Looking at the correlation plot, there are grouping of columns where the columns have high correlation to each other. In this analysis, we included them since we would like to see the effect of using the machine learning methodology on all pertinent data.
+
+For the analysis, we will use the raw data. The samples are divided further into training and testing sample. For repeatability, first we set the seed to 1234. Then, using the caret createDataPartition command, split the data into 75% of rows to be used for training and the rest for testing.
+
+
+```{r setup, echo=F, warning=F}
+require(dplyr);require(caret);
+
+setwd("~/JHU Data Science/8Machine Learning/Project")
+
+# data source source: http://groupware.les.inf.puc-rio.br/har.
+# download and open the file
+# download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+#               destfile="pml-training.csv")
+training <- read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!",""))
+
+# download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+#               destfile="pml-testing.csv")
+testing <- read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!",""))
+
+# explore the data
+# summary(training)
+# glimpse(training)
+
+# remove the sample ID columns
+df <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+# some columns have mostly NAs. Remove any columns with NA
+df <- df[, ! apply( df , 2, function(x) any(is.na(x)) ) ]
+testing <- testing[, ! apply( testing , 2, function(x) any(is.na(x)) ) ]
+
+
+# corrplot
+require(corrplot)
+m <- cor(df[,1:(length(df)-1)])
+corrplot(m, method="ellipse")
+
+# require(car)
+# scatterplotMatrix(~roll_belt + pitch_belt + yaw_belt + total_accel_belt +
+#                       classe, data=df)
+
+# separate the raw data into training and testing
+set.seed(1234)
+inTrain <- createDataPartition(df$classe, p = 3/4)[[1]]
+dftrain <- df[inTrain,]
+dftest <- df[-inTrain,]
+
+
+```
+
+### Machine Learning: Gradient Boosting
+First, we tried using the Gradient Boosting method. 
+The prediction result have the accuracy of 96.43%. This accuracy is very good. 
+The kappa value is 95.48%, which means that the prediction is very good compared to random chance.
+
+
+```{r , warning=F }
+
+# gbm Generalized Boosted Regression Modeling
+gbmmod <- train(classe ~ ., data=dftrain, method="gbm", verbose=F)
+gbmpred <- predict(gbmmod, dftest)
+confusionMatrix(gbmpred,dftest$classe)
+
+
+# prediction on the testing data
+```
+
+### Machine Learning: Random Forest
+Second, we applied the Random Forest methodology. 
+The prediction result have the accuracy of 99.43%. This accuracy is very good. 
+The kappa value is 99.15%, which means that the prediction is very good compared to random chance.
+
+```{r , echo=FALSE, warning=F}
+# rf Random Forest
+rfmod <- train(classe ~., data=dftrain, method="rf", verbose=F)
+rfpred <- predict(rfmod, dftest)
+confusionMatrix(rfpred,dftest$classe)
+
+```
+
+### Conclusion
+Comparing the results of the gradient boosting and random forest for this data sets show that the human activity measurement data have very strong signals that can be exploited by the machine learning techniques in performing regression and classification.
+Both techniques show very good results. Since the random forest has a slightly better result, we will use the random forest in predicting the validation samples.
+
+The prediction for the validation sample are as follow
+```{r , echo=FALSE, warning=F}
+rfpred_validation <- predict(rfmod,testing)
+print(rfpred_validation)
+```
